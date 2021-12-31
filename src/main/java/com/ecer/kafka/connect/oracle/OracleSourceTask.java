@@ -1,26 +1,5 @@
 package com.ecer.kafka.connect.oracle;
 
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.BEFORE_DATA_ROW_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.COMMITSCN_POSITION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.COMMIT_SCN_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.CSF_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.DATA_ROW_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.DOT;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.LOG_MINER_OFFSET_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.POSITION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.ROWID_POSITION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.ROW_ID_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.SCN_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.SEG_OWNER_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.SQL_REDO_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.TABLE_NAME_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.TEMPORARY_TABLE;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.TIMESTAMP_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.ORA_DESUPPORT_CM_VERSION;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_DDL;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.DDL_TOPIC_POSTFIX;
-
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -50,6 +29,8 @@ import org.slf4j.LoggerFactory;
 import net.sf.jsqlparser.JSQLParserException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.*;
 
 /**
  *  
@@ -260,7 +241,7 @@ public class OracleSourceTask extends SourceTask {
             contSF = logMinerData.getBoolean(CSF_FIELD);
           } 
           sqlX=sqlRedo;        
-          Timestamp timeStamp=logMinerData.getTimestamp(TIMESTAMP_FIELD);
+          Long timeStamp=logMinerData.getTimestamp(TIMESTAMP_FIELD).getTime();
 
           Data row = new Data(scn, segOwner, segName, sqlRedo,timeStamp,operation);
           topic = config.getTopic().equals("") ? (config.getDbNameAlias()+DOT+row.getSegOwner()+DOT+(operation.equals(OPERATION_DDL) ? DDL_TOPIC_POSTFIX : segName)).toUpperCase() : topic;
@@ -320,15 +301,15 @@ public class OracleSourceTask extends SourceTask {
 
   }
 
-  private Struct setValueV2(Data row,DataSchemaStruct dataSchemaStruct) {    
+  private Struct setValueV2(Data row,DataSchemaStruct dataSchemaStruct) {
     Struct valueStruct = new Struct(dataSchemaStruct.getDmlRowSchema())
               .put(SCN_FIELD, row.getScn())
               .put(SEG_OWNER_FIELD, row.getSegOwner())
               .put(TABLE_NAME_FIELD, row.getSegName())
-              .put(TIMESTAMP_FIELD, row.getTimeStamp())
+              .put(TIMESTAMP_FIELD_ALTER, row.getTimeStamp())
               .put(SQL_REDO_FIELD, row.getSqlRedo())
-              .put(OPERATION_FIELD, row.getOperation())
-              .put(DATA_ROW_FIELD, dataSchemaStruct.getDataStruct())
+              .put(OPERATION_FIELD_ALTER, row.getOperation())
+              .put(DATA_ROW_FIELD_ALTER, dataSchemaStruct.getDataStruct())
               .put(BEFORE_DATA_ROW_FIELD, dataSchemaStruct.getBeforeDataStruct());
     return valueStruct;
     
