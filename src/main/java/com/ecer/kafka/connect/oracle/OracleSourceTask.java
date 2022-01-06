@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import com.ecer.kafka.connect.oracle.models.Data;
 import com.ecer.kafka.connect.oracle.models.DataSchemaStruct;
 
+import com.ecer.kafka.connect.oracle.models.SrcDataSchemaStruct;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -67,6 +68,8 @@ public class OracleSourceTask extends SourceTask {
   BlockingQueue<SourceRecord> sourceRecordMq = new LinkedBlockingQueue<>();    
   LogMinerThread tLogMiner;
   ExecutorService executor = Executors.newFixedThreadPool(1);
+
+  static SrcDataSchemaStruct srcData;
    
   @Override
   public String version() {
@@ -241,13 +244,21 @@ public class OracleSourceTask extends SourceTask {
             contSF = logMinerData.getBoolean(CSF_FIELD);
           } 
           sqlX=sqlRedo;        
-          Long timeStamp=logMinerData.getTimestamp(TIMESTAMP_FIELD).getTime();
-
-          Data row = new Data(scn, segOwner, segName, sqlRedo,timeStamp,operation);
+          Timestamp timeStamp=logMinerData.getTimestamp(TIMESTAMP_FIELD);
+//          System.out.println("===========================");
+//          for(int i=1;i<=logMinerData.getMetaData().getColumnCount();i++){
+//            System.out.println(logMinerData.getMetaData().getColumnName(i));
+//            System.out.println(logMinerData.getMetaData().getCatalogName(i));
+//          }
+          Timestamp now = new Timestamp(System.currentTimeMillis());
+          Data row = new Data(scn, segOwner, segName, sqlRedo, now, operation, timeStamp);
           topic = config.getTopic().equals("") ? (config.getDbNameAlias()+DOT+row.getSegOwner()+DOT+(operation.equals(OPERATION_DDL) ? DDL_TOPIC_POSTFIX : segName)).toUpperCase() : topic;
           //log.info(String.format("Fetched %s rows from database %s ",ix,config.getDbNameAlias())+" "+row.getTimeStamp()+" "+row.getSegName()+" "+row.getScn()+" "+commitScn);
           if (ix % 100 == 0) log.info(String.format("Fetched %s rows from database %s ",ix,config.getDbNameAlias())+" "+row.getTimeStamp());
-          dataSchemaStruct = utils.createDataSchema(segOwner, segName, sqlRedo,operation); 
+          dataSchemaStruct = utils.createDataSchema(segOwner, segName, sqlRedo, operation);
+
+          srcData = utils.createSrcDataSchema(segOwner, segName, sqlRedo, operation, timeStamp);
+
           if (operation.equals(OPERATION_DDL)) row.setSegName(DDL_TOPIC_POSTFIX);     
           /**
            * Issue 68
@@ -302,12 +313,14 @@ public class OracleSourceTask extends SourceTask {
   }
 
   private Struct setValueV2(Data row,DataSchemaStruct dataSchemaStruct) {
+
     Struct valueStruct = new Struct(dataSchemaStruct.getDmlRowSchema())
               .put(SCN_FIELD, row.getScn())
               .put(SEG_OWNER_FIELD, row.getSegOwner())
               .put(TABLE_NAME_FIELD, row.getSegName())
-              .put(TIMESTAMP_FIELD_ALTER, row.getTimeStamp())
+              .put(TIMESTAMP_FIELD_ALTER, row.getTimeStamp().getTime())
               .put(SQL_REDO_FIELD, row.getSqlRedo())
+              .put(SRC, srcData.getDataStruct())
               .put(OPERATION_FIELD_ALTER, row.getOperation())
               .put(DATA_ROW_FIELD_ALTER, dataSchemaStruct.getDataStruct())
               .put(BEFORE_DATA_ROW_FIELD, dataSchemaStruct.getBeforeDataStruct());

@@ -1,12 +1,7 @@
 package com.ecer.kafka.connect.oracle;
 
 import java.net.ConnectException;
-import java.sql.CallableStatement;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.sql.*;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -14,8 +9,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.ecer.kafka.connect.oracle.models.DMLRow;
 import com.ecer.kafka.connect.oracle.models.DataSchemaStruct;
 
+import com.ecer.kafka.connect.oracle.models.SrcDataSchemaStruct;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -216,6 +213,10 @@ public class OracleSourceConnectorUtils{
         tabColsMap.put(keyTabCols, column); 
         log.debug("tabColsMap entry added: {} = {}", keyTabCols, column.toString());
       }
+      SchemaBuilder srcSchemaBuiler = SchemaBuilder.struct().name("src");
+      Schema sSchema = srcSchemaBuiler.field(EVENT_TIME, Schema.OPTIONAL_INT64_SCHEMA).optional().build();
+      tableSchema.put(owner+DOT+tableName+DOT+SRC, sSchema);
+
       Schema tSchema = dataSchemaBuiler.optional().build();
       tableSchema.put(owner+DOT+tableName, tSchema);
       mineTableColsResultSet.close();
@@ -332,6 +333,7 @@ public class OracleSourceConnectorUtils{
     protected DataSchemaStruct createDataSchema(String owner,String tableName,String sqlRedo,String operation) throws Exception{
 
       Schema dataSchema=EMPTY_SCHEMA;
+      Schema srcSchema=EMPTY_SCHEMA;
       Struct dataStruct = null;
       Struct beforeDataStruct = null;      
       String tableKey = owner+DOT+tableName;
@@ -354,6 +356,7 @@ public class OracleSourceConnectorUtils{
         LinkedHashMap<String,String> beforeDataMap = allDataMap.get(BEFORE_DATA_ROW_FIELD);
 
         dataSchema = tableSchema.get(tableKey);
+        srcSchema = tableSchema.get(tableKey+DOT+SRC);
         dataStruct = new Struct(dataSchema);
         beforeDataStruct = new Struct(dataSchema);
         
@@ -385,6 +388,7 @@ public class OracleSourceConnectorUtils{
           dataStruct=null;
         } 
       }
+
       Schema newSchema = SchemaBuilder.struct()
                   .name(preSchemaName)
                   .field(SCN_FIELD, Schema.INT64_SCHEMA)
@@ -392,6 +396,7 @@ public class OracleSourceConnectorUtils{
                   .field(TABLE_NAME_FIELD,Schema.STRING_SCHEMA)
                   .field(TIMESTAMP_FIELD_ALTER, Schema.INT64_SCHEMA) //org.apache.kafka.connect.data.Timestamp.SCHEMA)
                   .field(SQL_REDO_FIELD, Schema.STRING_SCHEMA)
+                    .field(SRC, srcSchema)
                   .field(OPERATION_FIELD_ALTER, Schema.STRING_SCHEMA)
                   .field(DATA_ROW_FIELD_ALTER, dataSchema)
                   .field(BEFORE_DATA_ROW_FIELD,dataSchema)
@@ -399,7 +404,15 @@ public class OracleSourceConnectorUtils{
 
       return new DataSchemaStruct(newSchema, dataStruct, beforeDataStruct);
       
-    }        
+    }
+
+    protected SrcDataSchemaStruct createSrcDataSchema(String owner, String tableName, String sqlRedo, String operation, Timestamp ts){
+        String tableKey = owner+DOT+tableName;
+        Schema srcSchema = tableSchema.get(tableKey+DOT+SRC);
+        Struct srcStruct = new Struct(srcSchema);
+        srcStruct.put(EVENT_TIME, ts.getTime());
+        return new SrcDataSchemaStruct(srcSchema, srcStruct);
+    }
 
     private Object reSetValue(String value,Schema colSchema){
       

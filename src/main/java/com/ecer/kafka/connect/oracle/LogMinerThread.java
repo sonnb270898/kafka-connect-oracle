@@ -19,42 +19,15 @@ import java.util.concurrent.BlockingQueue;
 
 import com.ecer.kafka.connect.oracle.models.DMLRow;
 import com.ecer.kafka.connect.oracle.models.DataSchemaStruct;
+import com.ecer.kafka.connect.oracle.models.SrcDataSchemaStruct;
 import com.ecer.kafka.connect.oracle.models.Transaction;
-
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.BEFORE_DATA_ROW_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.COMMITSCN_POSITION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.COMMIT_SCN_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.CSF_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.DATA_ROW_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.DOT;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.LOG_MINER_OFFSET_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.POSITION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.ROWID_POSITION_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.ROW_ID_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.SCN_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.SEG_OWNER_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.SQL_REDO_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.TABLE_NAME_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.TEMPORARY_TABLE;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.TIMESTAMP_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.COMMIT_TIMESTAMP_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.XID_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.THREAD_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_START;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_COMMIT;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_ROLLBACK;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_INSERT;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_UPDATE;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_DELETE;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.ROLLBACK_FIELD;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.OPERATION_DDL;
-import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.DDL_TOPIC_POSTFIX;
 
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static com.ecer.kafka.connect.oracle.OracleConnectorSchema.*;
 
 public class LogMinerThread implements Runnable {
     static final Logger log = LoggerFactory.getLogger(LogMinerThread.class);
@@ -84,7 +57,9 @@ public class LogMinerThread implements Runnable {
     private String topicConfig=null;
     private String dbNameAlias=null;
     private DataSchemaStruct dataSchemaStruct;  
-    private OracleSourceConnectorUtils utils;    
+    private OracleSourceConnectorUtils utils;
+
+    static SrcDataSchemaStruct srcData;
 
     public LogMinerThread(BlockingQueue<SourceRecord> mq,Connection dbConn,Long streamOffsetScn,CallableStatement logMinerStartStmt,String logMinerSelectSql,int dbFetchSize,String topicConfig,String dbNameAlias,OracleSourceConnectorUtils utils){
       this.sourceRecordMq = mq;
@@ -296,6 +271,7 @@ public class LogMinerThread implements Runnable {
 
   private SourceRecord createRecords(DMLRow dmlRow) throws Exception{
     dataSchemaStruct = utils.createDataSchema(dmlRow.getSegOwner(), dmlRow.getSegName(), dmlRow.getSqlRedo(),dmlRow.getOperation());
+    srcData = utils.createSrcDataSchema(dmlRow.getSegOwner(), dmlRow.getSegName(), dmlRow.getSqlRedo(),dmlRow.getOperation(), dmlRow.getCommitTimestamp());
     if (dmlRow.getOperation().equals(OPERATION_DDL)) dmlRow.setSegName(DDL_TOPIC_POSTFIX);
     return new SourceRecord(sourcePartition(), sourceOffset(dmlRow.getScn(),dmlRow.getCommitScn(),dmlRow.getRowId()), dmlRow.getTopic(),  dataSchemaStruct.getDmlRowSchema(), setValueV2(dmlRow,dataSchemaStruct));
   }
@@ -313,7 +289,7 @@ public class LogMinerThread implements Runnable {
     return offSet;
   }  
 
-  private Struct setValueV2(DMLRow row,DataSchemaStruct dataSchemaStruct) {    
+  private Struct setValueV2(DMLRow row,DataSchemaStruct dataSchemaStruct) throws Exception {
     Struct valueStruct = new Struct(dataSchemaStruct.getDmlRowSchema())
               .put(SCN_FIELD, row.getScn())
               .put(SEG_OWNER_FIELD, row.getSegOwner())
@@ -321,6 +297,7 @@ public class LogMinerThread implements Runnable {
               .put(TIMESTAMP_FIELD, row.getTimestamp())
               .put(SQL_REDO_FIELD, row.getSqlRedo())
               .put(OPERATION_FIELD, row.getOperation())
+              .put(SRC, srcData.getDataStruct())
               .put(DATA_ROW_FIELD, dataSchemaStruct.getDataStruct())
               .put(BEFORE_DATA_ROW_FIELD, dataSchemaStruct.getBeforeDataStruct());
     return valueStruct;

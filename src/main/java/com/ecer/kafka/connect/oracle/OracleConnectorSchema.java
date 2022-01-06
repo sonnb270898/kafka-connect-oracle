@@ -22,6 +22,7 @@ public class OracleConnectorSchema{
     public static final String TIMESTAMP_FIELD ="TIMESTAMP";
     public static final String TIMESTAMP_FIELD_ALTER ="ts_ms";
     public static final String COMMIT_TIMESTAMP_FIELD ="COMMIT_TIMESTAMP";
+    public static final String EVENT_TIME = "ts_ms";
     public static final String SQL_REDO_FIELD ="SQL_REDO";
     public static final String OPERATION_FIELD ="OPERATION";
     public static final String OPERATION_FIELD_ALTER ="op";
@@ -39,6 +40,7 @@ public class OracleConnectorSchema{
     public static final String NULL_FIELD ="NULL";
     public static final String DATA_TYPE_FIELD ="DATA_TYPE";
     public static final String DOT =".";
+    public static final String SRC ="source";
     public static final String COMMA = ",";
     public static final String ROW_ID_FIELD = "ROW_ID";
     public static final String SRC_CON_ID_FIELD = "SRC_CON_ID";

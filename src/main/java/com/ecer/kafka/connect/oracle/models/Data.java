@@ -14,9 +14,10 @@ public class Data{
     private String segName;
     private String sqlRedo;
     private Timestamp timeStamp;
+    private Timestamp commitTimeStamp;
     private String operation;
 
-    public Data(Long scn,String segOwner,String segName,String sqlRedo,Timestamp timeStamp,String operation){
+    public Data(Long scn,String segOwner,String segName,String sqlRedo,Timestamp timeStamp,String operation,Timestamp commitTimeStamp){
         super();
         this.scn=scn;
         this.segOwner=segOwner;
@@ -24,6 +25,7 @@ public class Data{
         this.sqlRedo=sqlRedo;
         this.timeStamp=timeStamp;
         this.operation=operation;
+        this.commitTimeStamp=commitTimeStamp;
     }
 
     public long getScn(){
@@ -50,6 +52,10 @@ public class Data{
         return operation;
     }
 
+    public Timestamp getCommitTimeStamp(){
+        return commitTimeStamp;
+    }
+
     public void setScn(Long scn){
         this.scn=scn;
     }
@@ -72,5 +78,9 @@ public class Data{
 
     public void setOperation(String operation){
         this.operation=operation;
+    }
+
+    public void setCommitTimeStamp(){
+        this.commitTimeStamp=commitTimeStamp;
     }
 }
